@@ -10,8 +10,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
-import anthropic
 import httpx
+from google import genai
 
 # The only four labels a triage may produce.
 LABELS = ("billing", "bug_report", "sales_lead", "spam")
@@ -120,17 +120,16 @@ class TriageClient:
 
 def classify_email(email: dict) -> str:
     """Return exactly one of LABELS for the given email via an LLM call."""
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    msg = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=10,
-        system=_CLASSIFY_SYSTEM,
-        messages=[{
-            "role": "user",
-            "content": f"From: {email['from']}\nSubject: {email['subject']}\n\n{email['body']}",
-        }],
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    prompt = (
+        f"{_CLASSIFY_SYSTEM}\n\n"
+        f"From: {email['from']}\nSubject: {email['subject']}\n\n{email['body']}"
     )
-    label = msg.content[0].text.strip().lower()
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+    )
+    label = response.text.strip().lower()
     # Treat any unexpected response as spam — fail safe, not fail open.
     return label if label in LABELS else "spam"
 
