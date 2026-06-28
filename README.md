@@ -102,4 +102,50 @@ Questions before you start? Email us. Once you open the scaffold, the clock is y
 
 ---
 
-<!-- ↓↓↓ CANDIDATE: add your "README the client could read" section here ↓↓↓ -->
+## Inbox Triage Agent — Client Guide
+
+### What it does
+
+The agent reads your inbox, classifies each email into one of four categories, and proposes the right action for each one — but **never sends anything without your explicit approval**.
+
+| Email type | What the agent does |
+|---|---|
+| Billing issue | Drafts a reply acknowledging the issue and setting a resolution timeline |
+| Bug report | Posts an alert to `#engineering` on Slack with the full context |
+| Sales lead | Drafts a warm reply **and** creates a CRM lead record |
+| Spam | Logs and drops — no action taken, no credentials used |
+
+### How to run it
+
+**Prerequisites:** Python 3.11+, a Gemini API key ([get one free](https://aistudio.google.com/apikey))
+
+```bash
+# 1. Install dependencies
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # macOS / Linux
+pip install -r requirements.txt
+
+# 2. Configure
+cp env.example .env
+# Edit .env and add your GEMINI_API_KEY
+
+# 3. Start the mock API (Terminal 1)
+.venv\Scripts\python.exe -m uvicorn mock_api.server:app --host 127.0.0.1 --port 8099 --reload
+
+# 4. Run the agent (Terminal 2)
+.venv\Scripts\python.exe run_triage.py              # interactive — approve each action
+.venv\Scripts\python.exe run_triage.py --auto-approve  # approve all (demo / smoke test)
+.venv\Scripts\python.exe run_triage.py --dry-run       # classify only, no writes
+
+# 5. Run the test suite
+.venv\Scripts\python.exe -m pytest tests/ -v
+```
+
+### The design decision I'm proudest of
+
+**The human-in-the-loop gate is enforced at the function boundary, not by convention.**
+
+`execute(action, client, approved=False)` returns `None` immediately if `approved` is `False` — before any branch that could touch a write endpoint. There is no way to accidentally skip the check: the gate lives inside the function, not in the caller. The write token itself is also withheld until after approval, so even a bug in the gate logic cannot produce an unapproved write.
+
+The same principle applies to prompt injection: emails instructing the agent to leak data or bypass rules are classified as `spam` by the LLM (the system prompt contains an explicit security rule), and `spam` maps to zero actions in the routing table — no credentials are ever loaded for that path.
