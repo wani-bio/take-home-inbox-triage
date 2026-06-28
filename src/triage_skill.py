@@ -126,7 +126,7 @@ def classify_email(email: dict) -> str:
         f"From: {email['from']}\nSubject: {email['subject']}\n\n{email['body']}"
     )
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=prompt,
     )
     label = response.text.strip().lower()
